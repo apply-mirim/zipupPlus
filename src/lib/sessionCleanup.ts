@@ -1,10 +1,9 @@
 import { supabase } from './supabase'
 
 /** 앱이 sessionStorage에 직접 넣는 키들. 전부 "지금 이 사람이 방금 만든 내용"이라 로그인한
- * 사람이 바뀌면 남아 있으면 안 된다 — 계약서 분석 결과에는 매물 주소·보증금·위험 조항이,
- * 마음 상담 기록에는 사용자가 붙여넣은 문자/카톡 내용이 들어 있다.
+ * 사람이 바뀌면 남아 있으면 안 된다.
  * (Supabase Auth 자체 세션은 localStorage에 따로 저장되며 signOut이 알아서 지우므로 여기 없다.) */
-const APP_SESSION_KEYS = ['zipup:lastAnalysis', 'zipup:psychGuardMessages']
+const APP_SESSION_KEYS: string[] = []
 
 /** 현재 sessionStorage에 담긴 데이터가 "누구 것인지" 표시해 두는 키. 로그인 사용자 id를 넣고,
  * 비로그인 상태면 'anon'을 넣는다. */
@@ -21,7 +20,7 @@ function clearAppSessionData() {
 }
 
 /**
- * 로그인한 사람이 바뀌면 앞사람이 남긴 분석 결과/상담 내용을 지운다.
+ * 로그인한 사람이 바뀌면 앞사람이 sessionStorage에 남긴 데이터를 지운다.
  *
  * sessionStorage는 탭이 살아 있는 동안 유지되기 때문에, 같은 탭에서 A가 로그아웃하고 B가
  * 로그인하면 B에게 A의 데이터가 그대로 보이는 문제가 있었다(공용 PC에서 특히 위험).

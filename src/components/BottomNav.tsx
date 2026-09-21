@@ -21,21 +21,11 @@ const iconProps = (active: boolean) => ({
 const items: NavItem[] = [
   {
     to: '/home',
-    label: '분석',
+    label: '매물',
     icon: (active) => (
       <svg {...iconProps(active)}>
         <path d="M3 11.5 12 4l9 7.5" />
         <path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9" />
-      </svg>
-    ),
-  },
-  {
-    to: '/analysis',
-    label: '리포트',
-    icon: (active) => (
-      <svg {...iconProps(active)}>
-        <circle cx="12" cy="12" r="8.5" />
-        <path d="M12 7v5l3.2 1.9" />
       </svg>
     ),
   },
@@ -45,15 +35,6 @@ const items: NavItem[] = [
     icon: (active) => (
       <svg {...iconProps(active)}>
         <path d="M9 20 3 17V5l6 3m0 12 6-3m-6 3V8m6 9 6 3V8l-6-3m0 12V5m0 3-6-3" />
-      </svg>
-    ),
-  },
-  {
-    to: '/psych-guard',
-    label: '상담',
-    icon: (active) => (
-      <svg {...iconProps(active)}>
-        <path d="M12 3 4 6v6c0 4.5 3.4 7.7 8 9 4.6-1.3 8-4.5 8-9V6l-8-3Z" />
       </svg>
     ),
   },

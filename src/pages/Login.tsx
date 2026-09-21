@@ -62,9 +62,9 @@ export default function Login() {
             반가워요
           </h1>
           <p className="mt-4 max-w-[420px] text-[16.5px] leading-relaxed text-text-gray">
-            계약서 분석 기록과 관심 지역,
+            관심 지역과 안심 시그널 맵 기록이
             <br />
-            마음 상담 히스토리가 그대로 이어져요.
+            그대로 이어져요.
           </p>
         </div>
 

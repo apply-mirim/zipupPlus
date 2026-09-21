@@ -8,37 +8,9 @@ import Card from "../components/ui/Card";
 import Chip from "../components/ui/Chip";
 import Toggle from "../components/ui/Toggle";
 import { deleteAccount } from "../lib/account";
-import {
-  fetchAnalysisHistory,
-  fetchGaslightingHistory,
-  toAnalysisResult,
-  type AnalysisHistoryItem,
-  type GaslightingHistoryItem,
-} from "../lib/history";
 import { supabase } from "../lib/supabase";
 
-type Tab = "contract" | "gaslighting";
-
 const SUPPORT_EMAIL = "support@zipup.com";
-
-const CONTRACT_LABEL = {
-  danger: "위험",
-  warning: "주의",
-  success: "안전",
-} as const;
-const CONTRACT_TONE = {
-  danger: "danger",
-  warning: "warning",
-  success: "success",
-} as const;
-const CHAT_TONE = { 위험: "danger", 주의: "warning", 안전: "success" } as const;
-
-const HISTORY_PREVIEW_COUNT = 5;
-
-function formatDate(value: string): string {
-  const d = new Date(value);
-  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
-}
 
 function DeleteAccountModal({
   onCancel,
@@ -58,7 +30,7 @@ function DeleteAccountModal({
           정말 탈퇴하시겠어요?
         </h2>
         <p className="mt-2 text-xs leading-relaxed text-text-gray">
-          <BrokenText text="탈퇴하면 계정 정보와 계약서 스캔·마음 상담 분석 기록이 모두 삭제되며 복구할 수 없어요." />
+          <BrokenText text="탈퇴하면 계정 정보가 모두 삭제되며 복구할 수 없어요." />
         </p>
         {error && (
           <p className="mt-2 text-xs font-medium text-danger">{error}</p>
@@ -95,16 +67,7 @@ export default function Profile() {
   const [user, setUser] = useState<User | null>(null);
   const [userLoading, setUserLoading] = useState(true);
 
-  const [tab, setTab] = useState<Tab>("contract");
-  const [analyses, setAnalyses] = useState<AnalysisHistoryItem[]>([]);
-  const [gaslighting, setGaslighting] = useState<GaslightingHistoryItem[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  const [historyError, setHistoryError] = useState<string | null>(null);
-  const [showAllContracts, setShowAllContracts] = useState(false);
-  const [showAllGaslighting, setShowAllGaslighting] = useState(false);
-
   const [riskAlerts, setRiskAlerts] = useState(true);
-  const [analysisAlerts, setAnalysisAlerts] = useState(true);
   const [marketingAlerts, setMarketingAlerts] = useState(false);
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -121,26 +84,6 @@ export default function Profile() {
       setUserLoading(false);
     });
   }, [navigate]);
-
-  useEffect(() => {
-    if (!user) return;
-
-    setHistoryLoading(true);
-    Promise.all([
-      fetchAnalysisHistory(user.id),
-      fetchGaslightingHistory(user.id),
-    ])
-      .then(([analysisRows, gaslightingRows]) => {
-        setAnalyses(analysisRows);
-        setGaslighting(gaslightingRows);
-      })
-      .catch((err) =>
-        setHistoryError(
-          err instanceof Error ? err.message : "이력을 불러오지 못했습니다.",
-        ),
-      )
-      .finally(() => setHistoryLoading(false));
-  }, [user]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -213,175 +156,6 @@ export default function Profile() {
         </div>
       </Card>
 
-      {/* 활동 내역 보기 */}
-      <Card className="p-0">
-        <h2 className="px-4 pt-4 text-sm font-bold text-text-dark">
-          활동 내역 보기
-        </h2>
-        <div className="mt-3 flex border-b border-border">
-          <button
-            type="button"
-            onClick={() => setTab("contract")}
-            className={`flex-1 py-3 text-center text-sm font-bold transition-colors ${
-              tab === "contract"
-                ? "border-b-2 border-primary text-primary"
-                : "text-text-lightgray"
-            }`}
-          >
-            계약서 스캔
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("gaslighting")}
-            className={`flex-1 py-3 text-center text-sm font-bold transition-colors ${
-              tab === "gaslighting"
-                ? "border-b-2 border-primary text-primary"
-                : "text-text-lightgray"
-            }`}
-          >
-            마음 상담
-          </button>
-        </div>
-
-        <div className="px-4 py-2">
-          {historyLoading && (
-            <p className="py-4 text-center text-xs text-text-gray">
-              불러오는 중...
-            </p>
-          )}
-          {!historyLoading && historyError && (
-            <p className="py-4 text-center text-xs font-medium text-danger">
-              {historyError}
-            </p>
-          )}
-
-          {!historyLoading &&
-            !historyError &&
-            tab === "contract" &&
-            (analyses.length === 0 ? (
-              <div className="flex flex-col items-center gap-1 py-8 text-center">
-                <p className="text-xs text-text-gray">
-                  아직 계약서 스캔 기록이 없어요.
-                </p>
-                <Link
-                  to="/home"
-                  className="mt-1 text-xs font-bold text-primary"
-                >
-                  홈에서 분석하러 가기
-                </Link>
-              </div>
-            ) : (
-              <>
-                <ul className="flex flex-col divide-y divide-border">
-                  {(showAllContracts
-                    ? analyses
-                    : analyses.slice(0, HISTORY_PREVIEW_COUNT)
-                  ).map((item) => (
-                    <li key={item.id}>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          navigate("/analysis", {
-                            state: { result: toAnalysisResult(item) },
-                          })
-                        }
-                        className="flex w-full items-center justify-between gap-3 py-3 text-left"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-xs font-medium text-text-dark">
-                            {item.address || "주소 미입력"}
-                          </p>
-                          <p className="mt-0.5 text-[11px] text-text-gray">
-                            {formatDate(item.created_at)}
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <Chip tone={CONTRACT_TONE[item.risk_level]}>
-                            {CONTRACT_LABEL[item.risk_level]} ·{" "}
-                            {item.overall_score}점
-                          </Chip>
-                          <span className="text-text-lightgray">›</span>
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                {analyses.length > HISTORY_PREVIEW_COUNT && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllContracts((v) => !v)}
-                    className="w-full border-t border-border py-2.5 text-center text-xs font-bold text-primary"
-                  >
-                    {showAllContracts
-                      ? "접기"
-                      : `전체보기 (총 ${analyses.length}개)`}
-                  </button>
-                )}
-              </>
-            ))}
-
-          {!historyLoading &&
-            !historyError &&
-            tab === "gaslighting" &&
-            (gaslighting.length === 0 ? (
-              <div className="flex flex-col items-center gap-1 py-8 text-center">
-                <p className="text-xs text-text-gray">
-                  아직 마음 상담 분석 기록이 없어요.
-                </p>
-                <Link
-                  to="/psych-guard"
-                  className="mt-1 text-xs font-bold text-primary"
-                >
-                  마음 상담으로 가기
-                </Link>
-              </div>
-            ) : (
-              <>
-                <ul className="flex flex-col divide-y divide-border">
-                  {(showAllGaslighting
-                    ? gaslighting
-                    : gaslighting.slice(0, HISTORY_PREVIEW_COUNT)
-                  ).map((item) => (
-                    <li key={item.id}>
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/psych-guard/${item.id}`)}
-                        className="flex w-full items-center justify-between gap-3 py-3 text-left"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-xs font-medium text-text-dark">
-                            {item.input_text}
-                          </p>
-                          <p className="mt-0.5 text-[11px] text-text-gray">
-                            {formatDate(item.created_at)}
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <Chip tone={CHAT_TONE[item.risk_level]}>
-                            {item.risk_level} · {item.confidence}%
-                          </Chip>
-                          <span className="text-text-lightgray">›</span>
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                {gaslighting.length > HISTORY_PREVIEW_COUNT && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllGaslighting((v) => !v)}
-                    className="w-full border-t border-border py-2.5 text-center text-xs font-bold text-primary"
-                  >
-                    {showAllGaslighting
-                      ? "접기"
-                      : `전체보기 (총 ${gaslighting.length}개)`}
-                  </button>
-                )}
-              </>
-            ))}
-        </div>
-      </Card>
-
       {/* 알림 설정 */}
       <Card>
         <h2 className="text-sm font-bold text-text-dark">알림 설정</h2>
@@ -391,12 +165,6 @@ export default function Profile() {
             description="관심 지역의 위험도가 변경되면 알려드려요"
             checked={riskAlerts}
             onChange={setRiskAlerts}
-          />
-          <Toggle
-            label="분석 완료 알림"
-            description="계약서 스캔·마음 상담 분석이 끝나면 알려드려요"
-            checked={analysisAlerts}
-            onChange={setAnalysisAlerts}
           />
           <Toggle
             label="마케팅 정보 수신"

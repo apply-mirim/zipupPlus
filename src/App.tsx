@@ -3,9 +3,6 @@ import MainLayout from './layouts/MainLayout'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Home from './pages/Home'
-import Analysis from './pages/Analysis'
-import Cure from './pages/Cure'
-import GaslightingDetail from './pages/GaslightingDetail'
 import Glossary from './pages/Glossary'
 import LawSearch from './pages/LawSearch'
 import Privacy from './pages/Privacy'
@@ -19,8 +16,6 @@ export default function App() {
       <Route path="/" element={<Login />} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
-      <Route path="/analysis" element={<Analysis />} />
-      <Route path="/psych-guard/:id" element={<GaslightingDetail />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/scoring" element={<ScoringGuide />} />
       <Route path="/glossary" element={<Glossary />} />
@@ -30,7 +25,6 @@ export default function App() {
 
       <Route element={<MainLayout />}>
         <Route path="/home" element={<Home />} />
-        <Route path="/psych-guard" element={<Cure />} />
         <Route path="/map" element={<SignalMap />} />
         <Route path="/profile" element={<Profile />} />
       </Route>

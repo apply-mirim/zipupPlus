@@ -83,7 +83,7 @@ export default function Signup() {
             안심하고 시작해요
           </h1>
           <p className="mt-4 max-w-[420px] text-[16.5px] leading-relaxed text-text-gray">
-            계약서 위험 분석, 지역별 위험도, 마음 상담까지
+            지역별 위험도부터 전세사기 뉴스까지
             <br />
             하나의 계정으로 이용하세요.
           </p>

@@ -1,8 +1,6 @@
 // Supabase Edge Function: delete-account
 // Deletes the currently authenticated user via the Supabase Auth admin API (requires the
-// service_role key, which is never exposed to the client). Rows in `analyses` and
-// `gaslighting_checks` cascade-delete automatically via their `user_id` foreign key
-// (`on delete cascade`), so no separate data cleanup is needed here.
+// service_role key, which is never exposed to the client).
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 

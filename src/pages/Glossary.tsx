@@ -102,9 +102,13 @@ export default function Glossary() {
           )}
         </div>
 
-        {/* /law-search는 search-legal-terms Edge Function이 법제처 IP 화이트리스트에 막혀
-         * 아직 정상 동작하지 않는다(docs/PROJECT_OVERVIEW.md 참고) — 인프라가 준비될 때까지는
-         * 링크를 아예 렌더링하지 않아, 사용자가 지금 안 되는 기능에 진입하지 않게 한다. */}
+        <button
+          type="button"
+          onClick={() => navigate('/law-search')}
+          className="mt-4 self-start text-xs font-bold text-primary underline underline-offset-2"
+        >
+          여기 없는 용어도 검색해보기 →
+        </button>
       </div>
     </div>
   )

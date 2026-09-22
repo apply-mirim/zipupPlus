@@ -395,6 +395,10 @@ verify_jwt = false
 # Same reasoning as fetch-market-data above.
 verify_jwt = false
 
+[functions.sync-legal-terms]
+# Same reasoning as fetch-market-data above — cron-only, x-cron-secret 헤더로 인증.
+verify_jwt = false
+
 [functions.search-legal-terms]
 # New-format publishable anon keys (sb_publishable_...) aren't JWTs, so supabase-js
 # doesn't send them as a Bearer token when there's no logged-in session — verify_jwt

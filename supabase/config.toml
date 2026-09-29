@@ -405,6 +405,22 @@ verify_jwt = false
 # would reject every anonymous call. The `apikey` header (always sent) is enough here.
 verify_jwt = false
 
+[functions.resolve-address]
+# Same reasoning as search-legal-terms above — called anonymously from the frontend.
+verify_jwt = false
+
+[functions.search-address]
+# Same reasoning as search-legal-terms above — called anonymously from the frontend.
+verify_jwt = false
+
+[functions.calculate-jeonse-ratio]
+# Same reasoning as search-legal-terms above — called anonymously from the frontend.
+verify_jwt = false
+
+[functions.calculate-hug-density]
+# Same reasoning as search-legal-terms above — called anonymously from the frontend.
+verify_jwt = false
+
 [functions.sync-news]
 # Same reasoning as fetch-market-data above — this is also cron-only. Previously had
 # no override here (defaulted to verify_jwt = true) while its cron job sent no auth

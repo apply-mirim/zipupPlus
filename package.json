@@ -11,7 +11,8 @@
     "generate:regions": "node scripts/generate-regions.mjs",
     "sync:hug-defaulters": "node scripts/sync-hug-defaulters.mjs",
     "fetch:legal-terms": "node scripts/fetch-legal-terms.mjs",
-    "backfill:legal-terms": "node scripts/backfill-legal-terms-from-provisions.mjs"
+    "backfill:legal-terms": "node scripts/backfill-legal-terms-from-provisions.mjs",
+    "populate:sigungu-population": "node scripts/populate-sigungu-population.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.7",

@@ -1,14 +1,24 @@
 // Supabase Edge Function: fetch-market-data
-// Pulls last month's 아파트 AND 연립다세대(빌라) 매매(trade)/전월세(rent) real-transaction data
-// from the MOLIT (국토교통부) API for a batch of regions from `_shared/regions.ts` (전국 252개
-// 지역), computes 평균 매매가/전세가/전세가율 for each housing type, and upserts the results into
+// Pulls 아파트 AND 연립다세대(빌라) 매매(trade)/전월세(rent) real-transaction data from the
+// MOLIT (국토교통부) API for a batch of regions from `_shared/regions.ts` (전국 252개 지역),
+// computes 평균 매매가/전세가/전세가율 for each housing type, and upserts the results into
 // `region_stats`. 빌라는 시세가 불투명해 실제 전세사기 위험이 훨씬 크므로, risk_score 계산에서는
 // 아파트보다 빌라 전세가율에 더 큰 가중치를 준다 — see _shared/riskScore.ts.
 //
+// 실거래가 조회/전세가율 계산은 _shared/jeonseRatio.ts를 쓴다 — calculate-jeonse-ratio와 동일한
+// 로직(전용면적 구간별 가중평균, 최근 3개월→표본 부족 시 6개월 폴백)을 공유한다. 예전에는 이
+// 함수만 지난달 한 달치를 단순 평균 내서 매매/전세 표본의 평형 구성이 다를 때(예: 매매는 대형,
+// 전세는 소형 위주) 전세가율이 왜곡되는 문제가 있었다(서초구에서 실측 확인).
+//
 // 252개 지역을 한 번에 순회하면 Edge Function 실행 시간 제한(150초)을 넘기므로, 매 호출마다
-// region_sync_cursor에 저장된 위치부터 BATCH_SIZE(50)개만 처리한다 — see _shared/regionBatch.ts.
-// pg_cron이 20분 간격으로 하루 6번 호출해 전체를 순회한다 — see
+// region_sync_cursor에 저장된 위치부터 BATCH_SIZE개만 처리한다 — see _shared/regionBatch.ts.
+// pg_cron이 18~20시(UTC) 사이 20분 간격으로 하루 9번 호출해 전체를 순회한다 — see
 // supabase/migrations/*_batch_region_stats_cron.sql. Not called from the frontend.
+//
+// IMPORTANT: 지역당 API 호출량이 예전(1개월×4엔드포인트=4콜)보다 최대 6배(6개월×4엔드포인트=
+// 24콜, 표본 부족해 6개월로 폴백되는 지역)까지 늘었다 — BATCH_SIZE를 30에서 크게 낮췄다
+// (_shared/regionBatch.ts 참고). 실제 실행 시간은 매 실행마다 이 함수가 반환/기록하는
+// durationMs로 확인할 수 있으니, 150초에 여유가 있으면 BATCH_SIZE를 다시 올려도 된다.
 //
 // IMPORTANT: MOLIT_API_KEY must be the "일반 인증키 (디코딩)" value from data.go.kr, NOT the
 // already-URL-encoded one — this code URL-encodes it itself via URLSearchParams.
@@ -17,6 +27,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
 import { requireCronSecret } from '../_shared/cronAuth.ts'
 import { recordJobRun } from '../_shared/jobStatus.ts'
+import { fetchRegionMarketData, summarizeAreaWeightedRatio } from '../_shared/jeonseRatio.ts'
 import { ALL_REGIONS } from '../_shared/regions.ts'
 import { takeNextBatch } from '../_shared/regionBatch.ts'
 import { recalculateAllRiskScores } from '../_shared/riskScore.ts'
@@ -26,95 +37,6 @@ const JOB_NAME = 'fetch-market-data'
 const MOLIT_API_KEY = Deno.env.get('MOLIT_API_KEY')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-
-const APT_TRADE_ENDPOINT = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade'
-const APT_RENT_ENDPOINT = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptRent/getRTMSDataSvcAptRent'
-// 연립다세대(빌라) 매매/전월세 — 아파트와 같은 API 패밀리라 요청/응답 형식이 동일하다.
-const VILLA_TRADE_ENDPOINT = 'https://apis.data.go.kr/1613000/RTMSDataSvcRHTrade/getRTMSDataSvcRHTrade'
-const VILLA_RENT_ENDPOINT = 'https://apis.data.go.kr/1613000/RTMSDataSvcRHRent/getRTMSDataSvcRHRent'
-
-/** 이번 달은 아직 신고 건수가 적으므로, 데이터가 안정적인 "지난 달"을 기준으로 조회한다. */
-function previousMonthYYYYMM(): string {
-  const now = new Date()
-  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
-  const prevMonth = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth() - 1, 1))
-  const yyyy = prevMonth.getUTCFullYear()
-  const mm = String(prevMonth.getUTCMonth() + 1).padStart(2, '0')
-  return `${yyyy}${mm}`
-}
-
-function parseAmount(raw: unknown): number | null {
-  if (raw == null) return null
-  const cleaned = String(raw).replace(/,/g, '').trim()
-  if (!cleaned) return null
-  const value = Number(cleaned)
-  return Number.isFinite(value) ? value : null
-}
-
-function mean(values: number[]): number | null {
-  if (values.length === 0) return null
-  return values.reduce((sum, v) => sum + v, 0) / values.length
-}
-
-interface MarketSummary {
-  avgSalePrice: number | null
-  avgJeonsePrice: number | null
-  jeonseRatio: number | null
-}
-
-/** 매매/전월세 실거래 목록에서 평균 매매가, 평균 전세가(월세 없는 순수 전세만), 전세가율을 계산한다. */
-function summarizeMarket(tradeItems: Record<string, unknown>[], rentItems: Record<string, unknown>[]): MarketSummary {
-  const salePrices = tradeItems.map((i) => parseAmount(i.dealAmount)).filter((v): v is number => v != null)
-  const jeonseDeposits = rentItems
-    .filter((i) => (parseAmount(i.monthlyRent) ?? 0) === 0)
-    .map((i) => parseAmount(i.deposit))
-    .filter((v): v is number => v != null)
-
-  const avgSalePrice = mean(salePrices)
-  const avgJeonsePrice = mean(jeonseDeposits)
-  const jeonseRatio = avgSalePrice && avgJeonsePrice ? (avgJeonsePrice / avgSalePrice) * 100 : null
-
-  return { avgSalePrice, avgJeonsePrice, jeonseRatio }
-}
-
-/** data.go.kr's XML→JSON gateway wraps results as response.body.items.item, normalizing
- *  away the single-object-vs-array and empty-string-when-no-results quirks. */
-async function fetchItems(endpoint: string, lawdCd: string, dealYmd: string): Promise<Record<string, unknown>[]> {
-  const params = new URLSearchParams({
-    serviceKey: MOLIT_API_KEY!,
-    LAWD_CD: lawdCd,
-    DEAL_YMD: dealYmd,
-    numOfRows: '1000',
-    pageNo: '1',
-    _type: 'json',
-  })
-
-  const res = await fetch(`${endpoint}?${params.toString()}`)
-  const rawText = await res.text()
-
-  if (!res.ok) {
-    throw new Error(`MOLIT API HTTP ${res.status}: ${rawText.slice(0, 200)}`)
-  }
-
-  let json: Record<string, any>
-  try {
-    json = JSON.parse(rawText)
-  } catch {
-    throw new Error(`MOLIT API non-JSON response: ${rawText.slice(0, 200)}`)
-  }
-  // 이 API는 성공 코드로 '00'이 아니라 '000'을 반환한다 (다른 data.go.kr API들과 다른 체계).
-  const resultCode = json?.response?.header?.resultCode
-  if (resultCode && !['00', '000'].includes(resultCode)) {
-    throw new Error(`MOLIT API error ${resultCode}: ${json?.response?.header?.resultMsg}`)
-  }
-
-  const items = json?.response?.body?.items
-  if (!items || typeof items === 'string') return []
-
-  const item = items.item
-  if (!item) return []
-  return Array.isArray(item) ? item : [item]
-}
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -132,12 +54,10 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: '국토교통부 API 키가 설정되지 않았습니다.' }, 500)
   }
 
-  const dealYmd = previousMonthYYYYMM()
+  const startedAt = Date.now()
 
   try {
     const { regions, batchStartIndex, totalRegions } = await takeNextBatch(supabase, 'fetch-market-data', ALL_REGIONS)
-
-    const EMPTY_SUMMARY: MarketSummary = { avgSalePrice: null, avgJeonsePrice: null, jeonseRatio: null }
 
     let updated = 0
     let failed = 0
@@ -146,66 +66,63 @@ Deno.serve(async (req: Request) => {
     const villaSampleErrors: { region: string; message: string }[] = []
 
     for (const region of regions) {
-      // 아파트/빌라 호출을 allSettled로 동시에 날리되 결과는 따로 처리한다 — 두 그룹을 하나의
-      // Promise.all/try-catch로 묶으면 (a) 한쪽이 실패할 때(예: 빌라 API가 아직 data.go.kr에서
-      // 활용신청이 안 됐을 때) 이미 잘 동작하던 아파트 데이터 수집까지 막히고, (b) 순차로 나눠
-      // 호출하면 지역당 처리 시간이 배로 늘어 배치 시간 예산을 넘길 수 있다.
-      const [villaResult, aptResult] = await Promise.allSettled([
-        Promise.all([fetchItems(VILLA_TRADE_ENDPOINT, region.code, dealYmd), fetchItems(VILLA_RENT_ENDPOINT, region.code, dealYmd)]),
-        Promise.all([fetchItems(APT_TRADE_ENDPOINT, region.code, dealYmd), fetchItems(APT_RENT_ENDPOINT, region.code, dealYmd)]),
-      ])
+      try {
+        // TODO(debug): "아파트/빌라 실거래 데이터를 가져오지 못함"으로 뭉뚱그려지던 실패 사유를
+        // 실제 HTTP 상태/MOLIT API 에러 메시지까지 보이게 하기 위한 임시 수집 — 원인 파악되면
+        // errorSink 인자와 아래 상세 로그를 제거할 것.
+        const regionErrors: string[] = []
+        const { apt, villa } = await fetchRegionMarketData(region.code, MOLIT_API_KEY, 'fetch-market-data', regionErrors)
 
-      let villa = EMPTY_SUMMARY
-      if (villaResult.status === 'fulfilled') {
-        villa = summarizeMarket(villaResult.value[0], villaResult.value[1])
-      } else {
-        console.error(`fetch-market-data: villa fetch failed for ${region.name} (${region.code})`, villaResult.reason)
-        if (villaSampleErrors.length < 3) {
-          villaSampleErrors.push({
-            region: region.name,
-            message: villaResult.reason instanceof Error ? villaResult.reason.message : String(villaResult.reason),
-          })
-        }
-        villaFailed++
-      }
+        const aptRawCount = apt.trade.length + apt.rent.length
+        const villaRawCount = villa.trade.length + villa.rent.length
 
-      if (aptResult.status === 'fulfilled') {
-        try {
-          const apt = summarizeMarket(aptResult.value[0], aptResult.value[1])
-
-          const { error } = await supabase
-            .from('region_stats')
-            .upsert(
-              {
-                region_code: region.code,
-                region_name: region.name,
-                avg_sale_price: apt.avgSalePrice,
-                avg_jeonse_price: apt.avgJeonsePrice,
-                jeonse_ratio: apt.jeonseRatio,
-                villa_avg_sale_price: villa.avgSalePrice,
-                villa_avg_jeonse_price: villa.avgJeonsePrice,
-                villa_jeonse_ratio: villa.jeonseRatio,
-                updated_at: new Date().toISOString(),
-              },
-              { onConflict: 'region_code' },
-            )
-
-          if (error) throw error
-          updated++
-        } catch (err) {
-          console.error(`fetch-market-data: failed for ${region.name} (${region.code})`, err)
-          if (sampleErrors.length < 3) {
-            sampleErrors.push({ region: region.name, message: err instanceof Error ? err.message : String(err) })
+        if (aptRawCount === 0 && villaRawCount === 0) {
+          // 아파트/빌라 모두 원시 레코드가 전혀 없으면(6개월 폴백까지 포함) API 자체가 이번엔
+          // 응답하지 않았을 가능성이 높다고 보고, 기존에 저장된 값을 null로 덮어쓰지 않도록
+          // upsert를 건너뛴다.
+          const detail = regionErrors.length > 0 ? regionErrors.join(' | ') : '(에러 없이 빈 결과만 반환됨)'
+          console.error(`fetch-market-data: no data at all for ${region.name} (${region.code}) — ${detail}`)
+          // TODO(debug): 원인 파악 전까지 표본 개수를 3 → 10으로 늘려 더 많은 실패 사례를 본다.
+          if (sampleErrors.length < 10) {
+            sampleErrors.push({ region: region.name, message: detail })
           }
           failed++
+          continue
         }
-      } else {
-        console.error(`fetch-market-data: apt fetch failed for ${region.name} (${region.code})`, aptResult.reason)
+
+        const aptSummary = summarizeAreaWeightedRatio(apt.trade, apt.rent)
+        const villaSummary = summarizeAreaWeightedRatio(villa.trade, villa.rent)
+
+        if (villaRawCount === 0) {
+          villaFailed++
+          if (villaSampleErrors.length < 3) {
+            villaSampleErrors.push({ region: region.name, message: '연립다세대 실거래 데이터 없음(6개월 폴백 포함)' })
+          }
+        }
+
+        const { error } = await supabase
+          .from('region_stats')
+          .upsert(
+            {
+              region_code: region.code,
+              region_name: region.name,
+              avg_sale_price: aptSummary.avgSalePrice,
+              avg_jeonse_price: aptSummary.avgJeonsePrice,
+              jeonse_ratio: aptSummary.ratio,
+              villa_avg_sale_price: villaSummary.avgSalePrice,
+              villa_avg_jeonse_price: villaSummary.avgJeonsePrice,
+              villa_jeonse_ratio: villaSummary.ratio,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'region_code' },
+          )
+
+        if (error) throw error
+        updated++
+      } catch (err) {
+        console.error(`fetch-market-data: failed for ${region.name} (${region.code})`, err)
         if (sampleErrors.length < 3) {
-          sampleErrors.push({
-            region: region.name,
-            message: aptResult.reason instanceof Error ? aptResult.reason.message : String(aptResult.reason),
-          })
+          sampleErrors.push({ region: region.name, message: err instanceof Error ? err.message : String(err) })
         }
         failed++
       }
@@ -217,7 +134,6 @@ Deno.serve(async (req: Request) => {
     await recalculateAllRiskScores(supabase)
 
     const summary = {
-      month: dealYmd,
       batchStartIndex,
       batchSize: regions.length,
       totalRegions,
@@ -226,6 +142,7 @@ Deno.serve(async (req: Request) => {
       sampleErrors,
       villaFailed,
       villaSampleErrors,
+      durationMs: Date.now() - startedAt,
     }
     await recordJobRun(supabase, JOB_NAME, { success: true, result: summary })
     return jsonResponse(summary)

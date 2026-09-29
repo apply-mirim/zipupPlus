@@ -421,6 +421,10 @@ verify_jwt = false
 # Same reasoning as search-legal-terms above — called anonymously from the frontend.
 verify_jwt = false
 
+[functions.get-contract-checklist]
+# Same reasoning as search-legal-terms above — called anonymously from the frontend.
+verify_jwt = false
+
 [functions.sync-news]
 # Same reasoning as fetch-market-data above — this is also cron-only. Previously had
 # no override here (defaulted to verify_jwt = true) while its cron job sent no auth

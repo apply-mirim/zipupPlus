@@ -20,7 +20,7 @@ const iconProps = (active: boolean) => ({
 
 const items: NavItem[] = [
   {
-    to: '/home',
+    to: '/explore',
     label: '매물',
     icon: (active) => (
       <svg {...iconProps(active)}>
@@ -57,7 +57,7 @@ export default function BottomNav() {
         <NavLink
           key={item.to}
           to={item.to}
-          end={item.to === '/home'}
+          end={item.to === '/explore'}
           className="flex flex-1 flex-col items-center justify-center gap-1"
         >
           {({ isActive }) => (

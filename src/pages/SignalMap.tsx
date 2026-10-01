@@ -7,6 +7,7 @@ import {
   type RegionStat,
   type RiskLevel,
 } from "../lib/regionStats";
+import { loadKakaoSdk } from "../lib/kakaoMap";
 
 interface DistrictFeature {
   type: "Feature";
@@ -34,34 +35,6 @@ const CHIP_TONE: Record<RiskLevel, "danger" | "warning" | "success"> = {
 
 function colorForRiskLevel(level: RiskLevel | null | undefined): string {
   return level ? RISK_COLOR[level] : NO_DATA_COLOR;
-}
-
-function loadKakaoSdk(appKey: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (window.kakao?.maps) {
-      resolve();
-      return;
-    }
-
-    const existing = document.getElementById(
-      "kakao-maps-sdk",
-    ) as HTMLScriptElement | null;
-    if (existing) {
-      existing.addEventListener("load", () => window.kakao.maps.load(resolve));
-      existing.addEventListener("error", () =>
-        reject(new Error("카카오맵 SDK를 불러오지 못했습니다.")),
-      );
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.id = "kakao-maps-sdk";
-    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${appKey}&autoload=false`;
-    script.onload = () => window.kakao.maps.load(resolve);
-    script.onerror = () =>
-      reject(new Error("카카오맵 SDK를 불러오지 못했습니다."));
-    document.head.appendChild(script);
-  });
 }
 
 function ringToLatLngs(ring: number[][]): kakao.maps.LatLng[] {

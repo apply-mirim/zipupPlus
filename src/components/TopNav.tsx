@@ -8,7 +8,7 @@ interface TopNavProps {
 }
 
 const menuItems = [
-  { to: "/home", label: "매물 탐색" },
+  { to: "/explore", label: "매물 탐색" },
   { to: "/map", label: "안심 시그널 맵" },
   { to: "/glossary", label: "용어집" },
 ];

@@ -70,12 +70,29 @@ function ChecklistItemCard({ item }: { item: ChecklistItem }) {
   )
 }
 
-/** 용어 사전 페이지의 "내 계약 체크리스트" 섹션. 건물유형+거래유형을 고르면
- *  get-contract-checklist를 호출해 체크리스트를 카드로 보여준다. 각 항목에 관련 용어가
- *  있으면 펼쳐서 법령 원문/쉬운 설명을 확인할 수 있다. */
-export default function ContractChecklist() {
-  const [propertyType, setPropertyType] = useState<PropertyType>('apartment')
-  const [dealType, setDealType] = useState<DealType>('jeonse')
+interface ContractChecklistProps {
+  /** 매물 탐색 리포트처럼 건물유형/거래유형이 이미 다른 곳에서 정해져 있을 때 넘기면, 이
+   *  컴포넌트의 자체 드롭다운은 숨기고 그 값을 그대로 쓴다. 안 넘기면(용어집 페이지처럼
+   *  독립적으로 쓸 때) 기존과 동일하게 내부 상태 + 드롭다운으로 동작한다. */
+  propertyType?: PropertyType
+  dealType?: DealType
+}
+
+/** 용어 사전 페이지의 "내 계약 체크리스트" 섹션 + 매물 탐색 리포트가 공유하는 컴포넌트.
+ *  건물유형+거래유형을 고르면(또는 props로 받으면) get-contract-checklist를 호출해
+ *  체크리스트를 카드로 보여준다. 각 항목에 관련 용어가 있으면 펼쳐서 법령 원문/쉬운 설명을
+ *  확인할 수 있다. */
+export default function ContractChecklist({
+  propertyType: controlledPropertyType,
+  dealType: controlledDealType,
+}: ContractChecklistProps = {}) {
+  const isControlled = controlledPropertyType != null && controlledDealType != null
+
+  const [internalPropertyType, setInternalPropertyType] = useState<PropertyType>('apartment')
+  const [internalDealType, setInternalDealType] = useState<DealType>('jeonse')
+  const propertyType = controlledPropertyType ?? internalPropertyType
+  const dealType = controlledDealType ?? internalDealType
+
   const [items, setItems] = useState<ChecklistItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -106,35 +123,39 @@ export default function ContractChecklist() {
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-pretty text-[11px] leading-relaxed text-text-lightgray">
-        <BrokenText text="건물유형과 거래유형을 고르면 계약 전 꼭 확인해야 할 항목을 체크리스트로 보여드려요." />
-      </p>
+      {!isControlled && (
+        <>
+          <p className="text-pretty text-[11px] leading-relaxed text-text-lightgray">
+            <BrokenText text="건물유형과 거래유형을 고르면 계약 전 꼭 확인해야 할 항목을 체크리스트로 보여드려요." />
+          </p>
 
-      <div className="flex gap-2">
-        <select
-          value={propertyType}
-          onChange={(e) => setPropertyType(e.target.value as PropertyType)}
-          className="h-11 flex-1 rounded-input border-[1.2px] border-border bg-white px-3 text-sm text-text-dark outline-none focus:border-primary"
-        >
-          {PROPERTY_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {PROPERTY_TYPE_LABELS[type]}
-            </option>
-          ))}
-        </select>
+          <div className="flex gap-2">
+            <select
+              value={internalPropertyType}
+              onChange={(e) => setInternalPropertyType(e.target.value as PropertyType)}
+              className="h-11 flex-1 rounded-input border-[1.2px] border-border bg-white px-3 text-sm text-text-dark outline-none focus:border-primary"
+            >
+              {PROPERTY_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {PROPERTY_TYPE_LABELS[type]}
+                </option>
+              ))}
+            </select>
 
-        <select
-          value={dealType}
-          onChange={(e) => setDealType(e.target.value as DealType)}
-          className="h-11 flex-1 rounded-input border-[1.2px] border-border bg-white px-3 text-sm text-text-dark outline-none focus:border-primary"
-        >
-          {DEAL_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {DEAL_TYPE_LABELS[type]}
-            </option>
-          ))}
-        </select>
-      </div>
+            <select
+              value={internalDealType}
+              onChange={(e) => setInternalDealType(e.target.value as DealType)}
+              className="h-11 flex-1 rounded-input border-[1.2px] border-border bg-white px-3 text-sm text-text-dark outline-none focus:border-primary"
+            >
+              {DEAL_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {DEAL_TYPE_LABELS[type]}
+                </option>
+              ))}
+            </select>
+          </div>
+        </>
+      )}
 
       <div className="flex flex-col gap-3">
         {loading ? (

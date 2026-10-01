@@ -32,6 +32,16 @@ declare namespace kakao.maps {
     setOptions(options: Partial<PolygonOptions>): void
   }
 
+  interface MarkerOptions {
+    position: LatLng
+    map?: Map
+  }
+
+  class Marker {
+    constructor(options: MarkerOptions)
+    setMap(map: Map | null): void
+  }
+
   namespace event {
     function addListener(target: unknown, type: string, handler: () => void): void
   }

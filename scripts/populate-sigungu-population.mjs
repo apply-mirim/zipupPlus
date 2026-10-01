@@ -111,6 +111,18 @@ function extractResultCode(head) {
   return head?.resultCode;
 }
 
+// extractResultCode와 동일한 이유로 두 head 형태를 모두 시도한다.
+function extractResultMsg(head) {
+  if (Array.isArray(head)) {
+    for (const entry of head) {
+      if (entry?.RESULT?.resultMsg) return String(entry.RESULT.resultMsg);
+      if (entry?.resultMsg) return String(entry.resultMsg);
+    }
+    return undefined;
+  }
+  return head?.resultMsg;
+}
+
 function extractTotalCount(head) {
   if (Array.isArray(head)) {
     for (const entry of head) {
@@ -147,9 +159,21 @@ async function fetchPopulationPage(roadNmCd, yyyymm, pageNo) {
     throw new Error(`행안부 인구 API 비JSON 응답: ${rawText.slice(0, 200)}`);
   }
 
-  const root = json?.response ?? json;
+  // 실측 확인: 이 API의 실제 JSON 최상위 키는 소문자 "response"가 아니라 대문자 "Response"다
+  // (다른 data.go.kr API들과 다른 표기) — json?.response만 보면 항상 undefined가 되어 아래
+  // head/items를 못 찾고 에러 없이 빈 배열만 반환하는 문제가 있었다(지역과 무관하게 전부
+  // 영향받음). 혹시 모를 표기 변경에 대비해 소문자도 계속 폴백으로 남겨둔다.
+  const root = json?.Response ?? json?.response ?? json;
   const head = root?.head;
   const resultCode = extractResultCode(head);
+  const resultMsg = extractResultMsg(head);
+
+  // TODO(debug): 강남구는 브라우저에서 srchFrYm=srchToYm=202608로 NORMAL_SERVICE가 나오는데
+  // 스크립트로 돌리면 종로구·중구·용산구·성동구 등이 "최근 3개월 데이터 없음"으로 나오는 문제
+  // 확인용 임시 로그 — 실제로 어떤 월을 시도하고 그 응답이 뭔지 원인 파악되면 제거할 것.
+  console.log(
+    `[DEBUG populate-sigungu-population] roadNmCd=${roadNmCd} srchFrYm=srchToYm=${yyyymm} pageNo=${pageNo} → resultCode=${resultCode} resultMsg=${resultMsg}`,
+  );
 
   if (resultCode === "3") return { items: [], totalCount: 0 }; // NODATA_ERROR — 해당 월 데이터 없음
   if (resultCode && !["00", "0"].includes(resultCode)) {
@@ -205,12 +229,29 @@ async function main() {
   }
 
   const regions = loadAllRegions();
-  console.log(`[populate-sigungu-population] 총 ${regions.length}개 시군구 조회 시작`);
+
+  // 이미 sigungu_population에 행이 있는(=이전 실행에서 성공적으로 채운) 시군구는 건너뛴다 —
+  // 중간에 중단돼도 다시 실행하면 처음(종로구)부터 다시 돌지 않고 이어서 처리된다.
+  const { data: existingRows, error: existingError } = await supabase
+    .from("sigungu_population")
+    .select("sigungu_code");
+  if (existingError) {
+    console.error(
+      "[populate-sigungu-population] 기존 진행 상황 조회 실패 — 처음부터 전부 다시 시도합니다.",
+      existingError,
+    );
+  }
+  const alreadyDone = new Set((existingRows ?? []).map((r) => r.sigungu_code));
+
+  const remaining = regions.filter((r) => !alreadyDone.has(r.code));
+  console.log(
+    `[populate-sigungu-population] 총 ${regions.length}개 시군구 중 ${alreadyDone.size}개는 이미 처리됨 — ${remaining.length}개 처리 시작`,
+  );
 
   let succeeded = 0;
   const failed = [];
 
-  for (const [index, region] of regions.entries()) {
+  for (const [index, region] of remaining.entries()) {
     // TODO(debug): 대부분 지역이 "최근 3개월 모두 데이터 없음"으로 스킵되는 문제 확인용 임시
     // 로그 — 강남구는 브라우저 직접 테스트에서 roadNmCd=116800000000으로 정상 응답을 받았다고
     // 확인됐으니, 이 값과 실제로 비교해서 포맷이 일치하는지 볼 것. 원인 파악되면 제거할 것.
@@ -242,7 +283,7 @@ async function main() {
       succeeded++;
       if ((index + 1) % 20 === 0) {
         console.log(
-          `[populate-sigungu-population] ${index + 1}/${regions.length} 처리 (${region.name}: ${population.toLocaleString("ko-KR")}명)`,
+          `[populate-sigungu-population] ${index + 1}/${remaining.length} 처리 (${region.name}: ${population.toLocaleString("ko-KR")}명)`,
         );
       }
     } catch (err) {

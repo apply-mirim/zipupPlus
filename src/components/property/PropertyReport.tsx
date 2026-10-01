@@ -27,6 +27,18 @@ function formatManwon(value: number | null): string {
   return eok >= 1 ? `${eok.toFixed(1)}억원` : `${Math.round(value).toLocaleString('ko-KR')}만원`
 }
 
+/** "202607" → "2026년 7월" 식으로, fromYm~toYm을 "2026년 7월~9월"(같은 해) 또는
+ * "2025년 12월~2026년 2월"(연도가 걸칠 때) 형태로 합친다. */
+function formatYmRange(fromYm?: string, toYm?: string): string | null {
+  if (!fromYm || !toYm) return null
+  const fromYear = fromYm.slice(0, 4)
+  const fromMonth = Number(fromYm.slice(4, 6))
+  const toYear = toYm.slice(0, 4)
+  const toMonth = Number(toYm.slice(4, 6))
+  if (fromYear === toYear) return `${fromYear}년 ${fromMonth}월~${toMonth}월`
+  return `${fromYear}년 ${fromMonth}월~${toYear}년 ${toMonth}월`
+}
+
 function SectionCard({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Card className="flex flex-col gap-3">
@@ -84,11 +96,11 @@ export default function PropertyReport({ input }: { input: PropertyReportInput }
 
   useEffect(() => {
     setTransactionsLoading(true)
-    fetchRecentTransactions(input.sigunguCode, input.propertyType)
+    fetchRecentTransactions(input.sigunguCode, input.propertyType, { eupmyeondong: input.eupmyeondong })
       .then(setTransactions)
       .catch((err) => setTransactionsError(err instanceof Error ? err.message : '실거래가 조회에 실패했어요.'))
       .finally(() => setTransactionsLoading(false))
-  }, [input.sigunguCode, input.propertyType])
+  }, [input.sigunguCode, input.propertyType, input.eupmyeondong])
 
   useEffect(() => {
     if (!input.landlordName) return
@@ -110,6 +122,7 @@ export default function PropertyReport({ input }: { input: PropertyReportInput }
         lng: input.lng,
         admin_code: input.adminCode,
         sigungu_name: input.sigunguName,
+        eupmyeondong: input.eupmyeondong,
         property_type: input.propertyType,
         deal_type: input.dealType,
         deposit_amount: input.depositAmount,
@@ -194,36 +207,50 @@ export default function PropertyReport({ input }: { input: PropertyReportInput }
           <p className="text-xs text-text-lightgray">불러오는 중...</p>
         ) : transactionsError ? (
           <p className="text-xs text-danger">{transactionsError}</p>
-        ) : !transactions || transactions.transactions.length === 0 ? (
-          <p className="text-xs text-text-lightgray">{transactions?.note ?? '조회된 실거래가가 없어요.'}</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-[11px]">
-              <thead>
-                <tr className="border-b border-border text-text-lightgray">
-                  <th className="py-1.5 pr-2 font-medium">건물명</th>
-                  <th className="py-1.5 pr-2 font-medium">전용면적</th>
-                  <th className="py-1.5 pr-2 font-medium">거래연월</th>
-                  <th className="py-1.5 pr-2 font-medium">유형</th>
-                  <th className="py-1.5 font-medium">가격</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.transactions.map((t, idx) => (
-                  <tr key={idx} className="border-b border-border/60">
-                    <td className="py-1.5 pr-2 text-text-dark">{t.buildingName}</td>
-                    <td className="py-1.5 pr-2 text-text-gray">{t.exclusiveArea != null ? `${t.exclusiveArea}㎡` : '-'}</td>
-                    <td className="py-1.5 pr-2 text-text-gray">{t.dealYearMonth}</td>
-                    <td className="py-1.5 pr-2 text-text-gray">{t.dealType}</td>
-                    <td className="py-1.5 text-text-dark">
-                      {formatManwon(t.price)}
-                      {t.monthlyRent ? ` / 월 ${t.monthlyRent.toLocaleString('ko-KR')}만원` : ''}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            {transactions && formatYmRange(transactions.fromYm, transactions.toYm) && (
+              <p className="text-[11px] text-text-lightgray">
+                {formatYmRange(transactions.fromYm, transactions.toYm)} 거래 중 최신순 상위 20건까지 표시해요(총 {transactions.transactions.length}건).
+              </p>
+            )}
+            {transactions?.expandedToSigungu && input.eupmyeondong && (
+              <p className="text-[11px] font-medium text-primary">
+                {input.eupmyeondong} 기준 거래가 적어 {input.sigunguName} 전체 범위로 확대했어요.
+              </p>
+            )}
+            {!transactions || transactions.transactions.length === 0 ? (
+              <p className="text-xs text-text-lightgray">{transactions?.note ?? '조회된 실거래가가 없어요.'}</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-[11px]">
+                  <thead>
+                    <tr className="border-b border-border text-text-lightgray">
+                      <th className="py-1.5 pr-2 font-medium">건물명</th>
+                      <th className="py-1.5 pr-2 font-medium">전용면적</th>
+                      <th className="py-1.5 pr-2 font-medium">거래연월</th>
+                      <th className="py-1.5 pr-2 font-medium">유형</th>
+                      <th className="py-1.5 font-medium">가격</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transactions.transactions.map((t, idx) => (
+                      <tr key={idx} className="border-b border-border/60">
+                        <td className="py-1.5 pr-2 text-text-dark">{t.buildingName}</td>
+                        <td className="py-1.5 pr-2 text-text-gray">{t.exclusiveArea != null ? `${t.exclusiveArea}㎡` : '-'}</td>
+                        <td className="py-1.5 pr-2 text-text-gray">{t.dealYearMonth}</td>
+                        <td className="py-1.5 pr-2 text-text-gray">{t.dealType}</td>
+                        <td className="py-1.5 text-text-dark">
+                          {formatManwon(t.price)}
+                          {t.monthlyRent ? ` / 월 ${t.monthlyRent.toLocaleString('ko-KR')}만원` : ''}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
       </SectionCard>
 

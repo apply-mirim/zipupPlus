@@ -10,6 +10,8 @@ export interface PropertyReportInput {
   adminCode: string
   sigunguCode: string
   sigunguName: string
+  /** resolve-address의 읍면동명 — get-recent-transactions가 동 단위로 먼저 좁혀 찾는 데 쓴다. */
+  eupmyeondong: string | null
   propertyType: PropertyType
   dealType: DealType
   depositAmount: number | null

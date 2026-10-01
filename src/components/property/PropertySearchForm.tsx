@@ -41,6 +41,7 @@ export default function PropertySearchForm({ onSubmit }: PropertySearchFormProps
       adminCode: resolved.admin_code,
       sigunguCode: resolved.admin_code.slice(0, 5),
       sigunguName: resolved.sigungu ?? resolved.admin_code.slice(0, 5),
+      eupmyeondong: resolved.eupmyeondong,
       propertyType,
       dealType,
       depositAmount: depositAmount.trim() ? Number(depositAmount) : null,

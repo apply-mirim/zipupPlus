@@ -10,6 +10,9 @@ export interface SavedProperty {
   lng: number
   admin_code: string
   sigungu_name: string
+  /** resolve-address의 읍면동명. 이 컬럼이 생기기 전에 저장된 매물은 null — 그 경우
+   * get-recent-transactions가 동 필터링 없이 시군구 전체로 조회한다. */
+  eupmyeondong: string | null
   property_type: PropertyType
   deal_type: DealType
   deposit_amount: number | null
@@ -24,6 +27,7 @@ export interface NewSavedProperty {
   lng: number
   admin_code: string
   sigungu_name: string
+  eupmyeondong?: string | null
   property_type: PropertyType
   deal_type: DealType
   deposit_amount?: number | null

@@ -41,7 +41,7 @@ export default function TopNav({ variant = "app" }: TopNavProps) {
           to={variant === "app" ? "/home" : "/"}
           className="flex items-center"
         >
-          <img src="/illustrations/logo.svg" alt="ZIPUP" className="h-[22px]" />
+          <img src="/illustrations/logo.svg" alt="ONZIP+" className="h-[30px]" />
         </Link>
 
         {variant === "app" ? (

@@ -69,10 +69,10 @@ export default function Home() {
           처음 서울 살이, 이제 혼자 걱정하지 마세요.
         </p>
         <Link
-          to="/map"
+          to="/explore"
           className="mt-6 inline-flex items-center justify-center rounded-btn bg-primary px-6 py-3 text-sm font-bold text-white"
         >
-          안심 시그널 맵 보기 →
+          매물 탐색하기 →
         </Link>
       </section>
 

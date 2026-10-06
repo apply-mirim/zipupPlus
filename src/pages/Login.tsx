@@ -70,12 +70,13 @@ export default function Login() {
 
         <div className="w-full max-w-app lg:max-w-[440px] lg:rounded-card lg:border lg:border-border lg:bg-card lg:p-10 lg:shadow-card">
           <div className="flex flex-col items-center lg:items-start">
-            <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-[20px] bg-primary-bg text-3xl lg:hidden">
-              🏠
-            </div>
-            <h2 className="text-[34px] font-bold text-primary lg:text-xl lg:font-extrabold lg:text-text-dark">
-              <span className="lg:hidden">ONZIP+</span>
-              <span className="hidden lg:inline">로그인</span>
+            <img
+              src="/illustrations/logo.svg"
+              alt="ONZIP+"
+              className="mb-2 h-12 lg:hidden"
+            />
+            <h2 className="hidden text-xl font-extrabold text-text-dark lg:block">
+              로그인
             </h2>
             <p className="mt-2 text-balance text-center text-sm text-text-gray lg:hidden">
               AI로 전세사기 위험을 미리 확인하세요
